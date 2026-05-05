@@ -386,14 +386,11 @@ def scheduled_feed_update():
     """Scheduled task to update feeds"""
     with app.app_context():
         print(f"[{datetime.now()}] Running scheduled feed update...")
-        new_posts = update_all_feeds()
-        print(f"[{datetime.now()}] Updated: {new_posts} new posts")
-
-
-# Initialize scheduler
-scheduler = BackgroundScheduler()
-scheduler.add_job(func=scheduled_feed_update, trigger="interval", minutes=5)
-scheduler.start()
+        try:
+            new_posts = update_all_feeds()
+            print(f"[{datetime.now()}] Updated: {new_posts} new posts")
+        except Exception as e:
+            print(f"[{datetime.now()}] Error updating feeds: {e}")
 
 
 # ============================================
@@ -452,8 +449,65 @@ def init_db():
 # RUN APP
 # ============================================
 
+# Initialize database on startup (for production with Gunicorn)
+with app.app_context():
+    try:
+        db.create_all()
+        print("Database tables created/verified")
+        
+        # Add default feeds if none exist
+        if RSSFeed.query.count() == 0:
+            print("No feeds found, adding default feeds...")
+            default_feeds = [
+                {
+                    'name': 'ULIS - ĐH Ngoại ngữ ĐHQGHN',
+                    'url': 'https://rss.app/feeds/v1.1/AgH8JEE481LUB8cs.json',
+                    'page_url': 'https://www.facebook.com/profile.php?id=100065248250882',
+                    'color1': '#667eea',
+                    'color2': '#764ba2',
+                    'active': True
+                },
+                {
+                    'name': 'HANU - Viện Khổng Tử',
+                    'url': 'https://rss.app/feeds/v1.1/8p6E2WY0mwptt3q9.json',
+                    'page_url': '',
+                    'color1': '#f093fb',
+                    'color2': '#f5576c',
+                    'active': True
+                },
+                {
+                    'name': 'HNUE - ĐH Sư phạm HN',
+                    'url': 'https://rss.app/feeds/v1.1/nGNlg9y9t8HP6Kd8.json',
+                    'page_url': '',
+                    'color1': '#4facfe',
+                    'color2': '#00f2fe',
+                    'active': True
+                }
+            ]
+            
+            for feed_data in default_feeds:
+                feed = RSSFeed(**feed_data)  # type: ignore[arg-type]
+                db.session.add(feed)
+            
+            db.session.commit()
+            print("Default feeds added successfully")
+            
+            # Fetch initial posts
+            try:
+                update_all_feeds()
+                print("Initial posts fetched")
+            except Exception as e:
+                print(f"Error fetching initial posts: {e}")
+    except Exception as e:
+        print(f"Database initialization error: {e}")
+
+# Initialize scheduler after database is ready
+scheduler = BackgroundScheduler()
+scheduler.add_job(func=scheduled_feed_update, trigger="interval", minutes=5)
+scheduler.start()
+print("Background scheduler started")
+
 if __name__ == '__main__':
-    init_db()
     app.run(debug=True, host='0.0.0.0', port=5000)
 
 # Made with Bob
