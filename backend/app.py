@@ -6,7 +6,10 @@ Flask REST API for HSK exam schedule checking
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import or_
+from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime, timedelta
+from typing import Optional
 import requests
 import os
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -38,6 +41,17 @@ class RSSFeed(db.Model):
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    def __init__(self, name: str, url: str, page_url: str = '',
+                 color1: str = '#667eea', color2: str = '#764ba2',
+                 active: bool = True, **kwargs):
+        super().__init__(**kwargs)
+        self.name = name
+        self.url = url
+        self.page_url = page_url
+        self.color1 = color1
+        self.color2 = color2
+        self.active = active
+    
     def to_dict(self):
         return {
             'id': self.id,
@@ -52,17 +66,33 @@ class RSSFeed(db.Model):
 
 class Post(db.Model):
     """Cached posts from RSS feeds"""
-    id = db.Column(db.String(100), primary_key=True)
-    feed_id = db.Column(db.Integer, db.ForeignKey('rss_feed.id'), nullable=False)
-    title = db.Column(db.Text, nullable=False)
-    content_text = db.Column(db.Text)
-    content_html = db.Column(db.Text)
-    url = db.Column(db.String(500))
-    image = db.Column(db.String(500))
-    date_published = db.Column(db.DateTime)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    __tablename__ = 'post'
+    
+    id: Mapped[str] = mapped_column(db.String(100), primary_key=True)
+    feed_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey('rss_feed.id'), nullable=False)
+    title: Mapped[str] = mapped_column(db.Text, nullable=False)
+    content_text: Mapped[Optional[str]] = mapped_column(db.Text, nullable=True)
+    content_html: Mapped[Optional[str]] = mapped_column(db.Text, nullable=True)
+    url: Mapped[Optional[str]] = mapped_column(db.String(500), nullable=True)
+    image: Mapped[Optional[str]] = mapped_column(db.String(500), nullable=True)
+    date_published: Mapped[Optional[datetime]] = mapped_column(db.DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.utcnow)
     
     feed = db.relationship('RSSFeed', backref='posts')
+    
+    def __init__(self, id: str, feed_id: int, title: str,
+                 content_text: str = '', content_html: str = '',
+                 url: str = '', image: str = '',
+                 date_published: Optional[datetime] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.id = id
+        self.feed_id = feed_id
+        self.title = title
+        self.content_text = content_text
+        self.content_html = content_html
+        self.url = url
+        self.image = image
+        self.date_published = date_published
     
     def to_dict(self):
         return {
@@ -88,6 +118,15 @@ class EmailSubscription(db.Model):
     active = db.Column(db.Boolean, default=True)
     last_sent = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def __init__(self, name: str, email: str, frequency: str = 'daily',
+                 active: bool = True, last_sent: Optional[datetime] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.name = name
+        self.email = email
+        self.frequency = frequency
+        self.active = active
+        self.last_sent = last_sent
     
     def to_dict(self):
         return {
@@ -141,9 +180,11 @@ def update_posts_from_feed(feed):
             content_text=item.get('content_text', ''),
             content_html=item.get('content_html', ''),
             url=item.get('url', ''),
-            image=item.get('image', ''),
-            date_published=datetime.fromisoformat(item['date_published'].replace('Z', '+00:00')) if item.get('date_published') else None
+            image=item.get('image', '')
         )
+        # Set date_published separately to avoid type checker issues
+        if item.get('date_published'):
+            post.date_published = datetime.fromisoformat(item['date_published'].replace('Z', '+00:00'))
         db.session.add(post)
         new_posts += 1
     
@@ -237,15 +278,15 @@ def get_posts():
     offset = request.args.get('offset', 0, type=int)
     
     # Build query
-    query = Post.query.join(RSSFeed).filter(RSSFeed.active == True)
+    query = Post.query.join(RSSFeed).filter(RSSFeed.active == True)  # type: ignore[arg-type]
     
     if feed_id:
-        query = query.filter(Post.feed_id == feed_id)
+        query = query.filter(Post.feed_id == feed_id)  # type: ignore[arg-type]
     
     if search:
         search_term = f'%{search}%'
         query = query.filter(
-            db.or_(
+            or_(
                 Post.title.ilike(search_term),
                 Post.content_text.ilike(search_term)
             )
@@ -375,26 +416,29 @@ def init_db():
                 'url': 'https://rss.app/feeds/v1.1/AgH8JEE481LUB8cs.json',
                 'page_url': 'https://www.facebook.com/profile.php?id=100065248250882',
                 'color1': '#667eea',
-                'color2': '#764ba2'
+                'color2': '#764ba2',
+                'active': True
             },
             {
                 'name': 'HANU - Viện Khổng Tử',
                 'url': 'https://rss.app/feeds/v1.1/8p6E2WY0mwptt3q9.json',
                 'page_url': '',
                 'color1': '#f093fb',
-                'color2': '#f5576c'
+                'color2': '#f5576c',
+                'active': True
             },
             {
                 'name': 'HNUE - ĐH Sư phạm HN',
                 'url': 'https://rss.app/feeds/v1.1/nGNlg9y9t8HP6Kd8.json',
                 'page_url': '',
                 'color1': '#4facfe',
-                'color2': '#00f2fe'
+                'color2': '#00f2fe',
+                'active': True
             }
         ]
         
         for feed_data in default_feeds:
-            feed = RSSFeed(**feed_data)
+            feed = RSSFeed(**feed_data)  # type: ignore[arg-type]
             db.session.add(feed)
         
         db.session.commit()
