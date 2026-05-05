@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tra cứu lịch thi HSK</title>
+    <link rel="stylesheet" href="style.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+    <script src="cookies.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎓 Tra cứu lịch thi HSK</h1>
+            <p class="subtitle">Thông tin lịch thi từ các điểm thi HSK tại Hà Nội</p>
+        </header>
+
+        <div class="controls">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="🔍 Tìm kiếm thông tin thi...">
+            </div>
+            
+            <div class="toggle-buttons">
+                <label class="toggle-label">
+                    <input type="checkbox" class="column-toggle" data-source="ulis" checked>
+                    <span class="toggle-text">ULIS</span>
+                </label>
+                <label class="toggle-label">
+                    <input type="checkbox" class="column-toggle" data-source="hanu" checked>
+                    <span class="toggle-text">HANU</span>
+                </label>
+                <label class="toggle-label">
+                    <input type="checkbox" class="column-toggle" data-source="hnue" checked>
+                    <span class="toggle-text">HNUE</span>
+                </label>
+            </div>
+
+            <div class="action-buttons">
+                <button id="darkModeToggle" class="icon-btn" title="Chế độ tối">🌙</button>
+                <button id="bookmarksBtn" class="icon-btn" title="Bài viết đã lưu">⭐</button>
+                <button id="notificationsBtn" class="icon-btn" title="Thông báo">🔔</button>
+                <button id="emailBtn" class="icon-btn" title="Nhận email">📧</button>
+                <button id="guideBtn" class="icon-btn" title="Hướng dẫn">📖</button>
+                <button id="settingsBtn" class="icon-btn" title="Cài đặt">⚙️</button>
+                <button id="addSourceBtn" class="add-btn">➕ Thêm nguồn</button>
+                <button id="refreshBtn" class="refresh-btn">🔄 Làm mới</button>
+            </div>
+        </div>
+
+        <!-- Modal thêm nguồn -->
+        <div id="addSourceModal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>➕ Thêm nguồn Facebook mới</h2>
+                
+                <div class="form-group">
+                    <label>Mật khẩu:</label>
+                    <input type="password" id="passwordInput" placeholder="Nhập mật khẩu">
+                </div>
+
+                <div id="addSourceForm" style="display: none;">
+                    <div class="form-group">
+                        <label>Tên nguồn:</label>
+                        <input type="text" id="sourceNameInput" placeholder="VD: ĐH Khoa học Xã hội">
+                    </div>
+
+                    <div class="form-group">
+                        <label>RSS Feed URL:</label>
+                        <input type="text" id="sourceFeedInput" placeholder="https://rss.app/feeds/v1.1/...">
+                        <small>Lấy RSS feed từ <a href="https://rss.app" target="_blank">rss.app</a></small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Màu gradient (tùy chọn):</label>
+                        <div class="color-inputs">
+                            <input type="color" id="color1Input" value="#667eea">
+                            <span>→</span>
+                            <input type="color" id="color2Input" value="#764ba2">
+                        </div>
+                    </div>
+
+                    <button id="submitSourceBtn" class="submit-btn">Thêm nguồn</button>
+                </div>
+
+                <button id="verifyPasswordBtn" class="verify-btn">Xác nhận</button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Đang tải dữ liệu...</p>
+        </div>
+
+        <div id="error" class="error" style="display: none;">
+            <p>⚠️ Không thể tải dữ liệu. Vui lòng thử lại sau.</p>
+        </div>
+
+        <div class="columns-container">
+            <div class="column" id="column-ulis">
+                <div class="column-header source-ulis">
+                    <h2>ULIS - ĐH Ngoại ngữ ĐHQGHN</h2>
+                </div>
+                <div class="column-posts" id="posts-ulis"></div>
+            </div>
+
+            <div class="column" id="column-hanu">
+                <div class="column-header source-hanu">
+                    <h2>HANU - Viện Khổng Tử</h2>
+                </div>
+                <div class="column-posts" id="posts-hanu"></div>
+            </div>
+
+            <div class="column" id="column-hnue">
+                <div class="column-header source-hnue">
+                    <h2>HNUE - ĐH Sư phạm HN</h2>
+                </div>
+                <div class="column-posts" id="posts-hnue"></div>
+            </div>
+        </div>
+
+        <!-- Bookmarks Modal -->
+        <div id="bookmarksModal" class="modal">
+            <div class="modal-content">
+                <span class="close" id="closeBookmarks">&times;</span>
+                <h2>⭐ Bài viết đã lưu</h2>
+                <div id="bookmarksList" class="bookmarks-list"></div>
+            </div>
+        </div>
+
+        <!-- Guide Modal -->
+        <div id="guideModal" class="modal">
+            <div class="modal-content guide-content">
+                <span class="close" id="closeGuide">&times;</span>
+                <h2>📖 Hướng dẫn tích hợp RSS Feed</h2>
+                
+                <div class="guide-section">
+                    <h3>🎯 Bước 1: Lấy RSS Feed từ rss.app</h3>
+                    <ol>
+                        <li>Truy cập <a href="https://rss.app" target="_blank">rss.app</a></li>
+                        <li>Click <strong>"Create Feed"</strong></li>
+                        <li>Chọn nguồn <strong>"Facebook"</strong></li>
+                        <li>Nhập link Facebook Page (VD: https://www.facebook.com/HSKTestCenter)</li>
+                        <li>Cấu hình:
+                            <ul>
+                                <li>Feed Name: Đặt tên</li>
+                                <li>Number of items: 20-50</li>
+                                <li>Update frequency: Every hour</li>
+                            </ul>
+                        </li>
+                        <li>Click <strong>"Create Feed"</strong></li>
+                        <li>Copy <strong>JSON Feed URL</strong>: <code>https://rss.app/feeds/v1.1/XXXXX.json</code></li>
+                    </ol>
+                </div>
+
+                <div class="guide-section">
+                    <h3>🔧 Bước 2: Thêm Feed vào Web</h3>
+                    <ol>
+                        <li>Click nút <strong>"➕ Thêm nguồn"</strong> trên web</li>
+                        <li>Nhập mật khẩu: <code class="password-code">anhtuandepzai</code></li>
+                        <li>Điền thông tin:
+                            <ul>
+                                <li><strong>Tên nguồn:</strong> VD: "ĐH Khoa học Xã hội"</li>
+                                <li><strong>RSS Feed URL:</strong> Paste URL từ bước 1</li>
+                                <li><strong>Màu gradient:</strong> Chọn 2 màu (tùy chọn)</li>
+                            </ul>
+                        </li>
+                        <li>Click <strong>"Thêm nguồn"</strong></li>
+                        <li>✅ Done! Feed mới xuất hiện ngay</li>
+                    </ol>
+                </div>
+
+                <div class="guide-section">
+                    <h3>🎨 Gợi ý màu gradient</h3>
+                    <div class="color-examples">
+                        <div class="color-example" style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+                            Blue → Purple
+                        </div>
+                        <div class="color-example" style="background: linear-gradient(135deg, #ec4899, #f43f5e);">
+                            Pink → Red
+                        </div>
+                        <div class="color-example" style="background: linear-gradient(135deg, #06b6d4, #3b82f6);">
+                            Cyan → Blue
+                        </div>
+                        <div class="color-example" style="background: linear-gradient(135deg, #f59e0b, #ef4444);">
+                            Orange → Red
+                        </div>
+                        <div class="color-example" style="background: linear-gradient(135deg, #10b981, #14b8a6);">
+                            Green → Teal
+                        </div>
+                        <div class="color-example" style="background: linear-gradient(135deg, #a855f7, #ec4899);">
+                            Purple → Pink
+                        </div>
+                    </div>
+                </div>
+
+                <div class="guide-section">
+                    <h3>⚠️ Lưu ý</h3>
+                    <ul>
+                        <li>✅ Facebook page phải là <strong>Public</strong></li>
+                        <li>✅ Free plan: Update mỗi giờ, 50 items</li>
+                        <li>✅ Test URL trước khi thêm: Mở trong browser xem có JSON không</li>
+                        <li>✅ Mật khẩu thêm nguồn: <code class="password-code">anhtuandepzai</code></li>
+                    </ul>
+                </div>
+
+                <div class="guide-section">
+                    <h3>🔍 Kiểm tra Feed</h3>
+                    <p>Mở URL trong browser để test:</p>
+                    <code class="code-block">https://rss.app/feeds/v1.1/YOUR_ID.json</code>
+                    <p style="margin-top: 10px;">Phải thấy JSON với <code>items</code> array</p>
+                </div>
+
+                <div class="guide-section">
+                    <h3>📞 Hỗ trợ</h3>
+                    <ul>
+                        <li>Website: <a href="https://rss.app" target="_blank">rss.app</a></li>
+                        <li>Email: support@rss.app</li>
+                        <li>Docs: <a href="https://rss.app/docs" target="_blank">rss.app/docs</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settingsModal" class="modal">
+            <div class="modal-content">
+                <span class="close" id="closeSettings">&times;</span>
+                <h2>⚙️ Cài đặt</h2>
+                
+                <div class="settings-section">
+                    <h3>📤 Xuất/Nhập cài đặt</h3>
+                    <div class="settings-buttons">
+                        <button onclick="SettingsManager.exportSettings()" class="settings-btn export-btn">
+                            📥 Xuất cài đặt
+                        </button>
+                        <label for="importFile" class="settings-btn import-btn">
+                            📤 Nhập cài đặt
+                            <input type="file" id="importFile" accept=".json" style="display: none;">
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>🔗 Chia sẻ cài đặt</h3>
+                    <button onclick="copyShareLink()" class="settings-btn share-btn">
+                        📋 Sao chép link chia sẻ
+                    </button>
+                    <small style="display: block; margin-top: 10px; color: var(--text-secondary);">
+                        Link chứa tất cả cài đặt của bạn (feeds, bookmarks, preferences)
+                    </small>
+                </div>
+
+                <div class="settings-section">
+                    <h3>🗑️ Xóa dữ liệu</h3>
+                    <button onclick="SettingsManager.clearSettings()" class="settings-btn danger-btn">
+                        ⚠️ Xóa tất cả cài đặt
+                    </button>
+                </div>
+
+                <div class="settings-section">
+                    <h3>ℹ️ Thông tin</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.9em;">
+                        Cài đặt được lưu trong cookies và localStorage<br>
+                        Tự động lưu mỗi 30 giây và khi đóng trang
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Email Notification Modal -->
+        <div id="emailModal" class="modal">
+            <div class="modal-content">
+                <span class="close" id="closeEmail">&times;</span>
+                <h2>📧 Nhận thông báo qua Email</h2>
+                
+                <div class="email-status" id="emailStatus">
+                    <p>Đăng ký email để nhận thông báo khi có bài viết mới về lịch thi HSK</p>
+                </div>
+
+                <div class="settings-section">
+                    <h3>📝 Đăng ký nhận email</h3>
+                    <form id="emailSubscribeForm">
+                        <div class="form-group">
+                            <label for="subscriberName">Họ tên:</label>
+                            <input type="text" id="subscriberName" placeholder="Nguyễn Văn A" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="subscriberEmail">Email:</label>
+                            <input type="email" id="subscriberEmail" placeholder="example@gmail.com" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Tần suất nhận email:</label>
+                            <select id="emailFrequency" class="frequency-select">
+                                <option value="immediate">Ngay lập tức (khi có bài mới)</option>
+                                <option value="daily" selected>Hàng ngày (tổng hợp)</option>
+                                <option value="weekly">Hàng tuần (tổng hợp)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="emailConsent" required>
+                                Tôi đồng ý nhận email thông báo
+                            </label>
+                        </div>
+                        <button type="submit" class="submit-btn">✅ Đăng ký</button>
+                    </form>
+                </div>
+
+                <div class="settings-section">
+                    <h3>🗑️ Hủy đăng ký</h3>
+                    <button onclick="unsubscribeEmail()" class="settings-btn danger-btn">
+                        ❌ Hủy nhận email
+                    </button>
+                </div>
+
+                <div class="settings-section">
+                    <h3>ℹ️ Lưu ý</h3>
+                    <ul style="color: var(--text-secondary); font-size: 0.9em; line-height: 1.6;">
+                        <li>Email sẽ chứa thông tin về lịch thi HSK mới nhất</li>
+                        <li>Bạn có thể hủy đăng ký bất cứ lúc nào</li>
+                        <li>Chúng tôi không chia sẻ email của bạn với bên thứ ba</li>
+                        <li>Service sử dụng EmailJS (miễn phí, không cần backend)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>Dữ liệu được cập nhật từ các trang Facebook chính thức</p>
+            <p class="last-update">Cập nhật lần cuối: <span id="lastUpdate">--</span></p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
